@@ -5,6 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Der AYTO-Match-Finder</title>
   </head>
+  <!-- Global error handler -->
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.position = 'fixed';
+      errorDiv.style.top = '0';
+      errorDiv.style.left = '0';
+      errorDiv.style.width = '100%';
+      errorDiv.style.backgroundColor = 'red';
+      errorDiv.style.color = 'white';
+      errorDiv.style.padding = '10px';
+      errorDiv.style.zIndex = '9999';
+      errorDiv.style.fontFamily = 'monospace';
+      errorDiv.innerText = `Runtime Error: ${message} at ${source}:${lineno}:${colno}`;
+      document.body.appendChild(errorDiv);
+      console.error('Global Error Caught:', error);
+    };
+    window.onunhandledrejection = function(event) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.position = 'fixed';
+      errorDiv.style.top = '50px'; // Offset from the other one
+      errorDiv.style.left = '0';
+      errorDiv.style.width = '100%';
+      errorDiv.style.backgroundColor = 'darkred';
+      errorDiv.style.color = 'white';
+      errorDiv.style.padding = '10px';
+      errorDiv.style.zIndex = '9999';
+      errorDiv.style.fontFamily = 'monospace';
+      // extract message safely
+      const reason = event.reason && (event.reason.message || event.reason.toString());
+      errorDiv.innerText = `Unhandled Rejection: ${reason}`;
+      document.body.appendChild(errorDiv);
+      console.error('Unhandled Rejection Caught:', event.reason);
+    }
+  </script>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

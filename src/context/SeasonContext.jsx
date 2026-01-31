@@ -1,151 +1,395 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import { supabase } from '../supabaseClient';
 
 const SeasonContext = createContext();
 
 export const useSeason = () => useContext(SeasonContext);
 
 export const SeasonProvider = ({ children }) => {
-  const [seasons, setSeasons] = useState(() => {
-    try {
-      const localData = localStorage.getItem('ayto-seasons');
-      return localData ? JSON.parse(localData) : [];
-    } catch (error) {
-      console.error("Could not parse seasons from localStorage", error);
-      return [];
-    }
-  });
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
 
-  const [currentSeasonId, setCurrentSeasonId] = useState(() => {
-    try {
-      const localData = localStorage.getItem('ayto-currentSeasonId');
-      return localData ? JSON.parse(localData) : null;
-    } catch (error) {
-      console.error("Could not parse currentSeasonId from localStorage", error);
-      return null;
-    }
-  });
+  const [seasons, setSeasons] = useState([]);
+  const [currentSeasonId, setCurrentSeasonId] = useState(null);
+  const [currentSeason, setCurrentSeason] = useState(null);
+  const [loadingSeasons, setLoadingSeasons] = useState(true);
+  const [loadingCurrentSeason, setLoadingCurrentSeason] = useState(false);
+  const [error, setError] = useState(null);
 
+  // Fetch all seasons
   useEffect(() => {
-    try {
-      localStorage.setItem('ayto-seasons', JSON.stringify(seasons));
-    } catch (error) {
-      console.error("Could not save seasons to localStorage", error);
-    }
-  }, [seasons]);
+    let isMounted = true;
+    const fetchSeasons = async () => {
+      setLoadingSeasons(true);
 
+      // Safety timeout
+      const timer = setTimeout(() => {
+        if (isMounted) {
+          setLoadingSeasons(false);
+          console.warn('fetchSeasons timed out, forcing loading false');
+        }
+      }, 15000);
+
+      try {
+        const { data, error } = await supabase
+          .from('seasons')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (isMounted) {
+          if (error) {
+            console.error('Error fetching seasons:', error);
+            setError(error.message);
+            setSeasons([]);
+          } else {
+            setSeasons(data);
+            // Try to set currentSeasonId from local storage if it exists and is valid
+            const storedCurrentSeasonId = localStorage.getItem('ayto-currentSeasonId');
+            if (storedCurrentSeasonId && data.some(s => s.id === parseInt(storedCurrentSeasonId))) {
+              setCurrentSeasonId(parseInt(storedCurrentSeasonId));
+            } else if (data.length > 0) {
+              setCurrentSeasonId(data[0].id); // Select the first season if none stored or invalid
+            } else {
+              setCurrentSeasonId(null);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("fetchSeasons exception:", e);
+      } finally {
+        if (isMounted) {
+          setLoadingSeasons(false);
+          clearTimeout(timer);
+        }
+      }
+    };
+
+    fetchSeasons();
+
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fetch current season details (candidates, matching nights, matching boxes)
   useEffect(() => {
-    try {
-      localStorage.setItem('ayto-currentSeasonId', JSON.stringify(currentSeasonId));
-    } catch (error) {
-      console.error("Could not save currentSeasonId to localStorage", error);
+    let isMounted = true;
+    const fetchCurrentSeasonDetails = async () => {
+      if (!currentSeasonId) {
+        if (isMounted) setCurrentSeason(null);
+        return;
+      }
+
+      setLoadingCurrentSeason(true);
+      setError(null);
+
+      // Safety timeout
+      const timer = setTimeout(() => {
+        if (isMounted) {
+          setLoadingCurrentSeason(false);
+          console.warn('fetchCurrentSeasonDetails timed out, forcing loading false');
+        }
+      }, 15000);
+
+      try {
+        const [
+          { data: seasonData, error: seasonError },
+          { data: candidatesData, error: candidatesError },
+          { data: matchingNightsData, error: matchingNightsError },
+          { data: matchingBoxesData, error: matchingBoxesError }
+        ] = await Promise.all([
+          supabase
+            .from('seasons')
+            .select('*')
+            .eq('id', currentSeasonId)
+            .single(),
+          supabase
+            .from('candidates')
+            .select('*')
+            .eq('season_id', currentSeasonId)
+            .order('name', { ascending: true }),
+          supabase
+            .from('matching_nights')
+            .select('*')
+            .eq('season_id', currentSeasonId)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('matching_boxes')
+            .select('*')
+            .eq('season_id', currentSeasonId)
+            .order('created_at', { ascending: true })
+        ]);
+
+        if (isMounted) {
+          if (seasonError) throw new Error(seasonError.message);
+          if (candidatesError) throw new Error(candidatesError.message);
+          if (matchingNightsError) throw new Error(matchingNightsError.message);
+          if (matchingBoxesError) throw new Error(matchingBoxesError.message);
+
+          setCurrentSeason({
+            ...seasonData,
+            candidates: candidatesData,
+            matchingNights: matchingNightsData,
+            truthBooths: matchingBoxesData, // Renamed truthBooths to matchingBoxes
+          });
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error('Error fetching season details:', err);
+          setError(err.message);
+          setCurrentSeason(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingCurrentSeason(false);
+          clearTimeout(timer);
+        }
+      }
+    };
+
+    fetchCurrentSeasonDetails();
+
+    return () => { isMounted = false; };
+  }, [currentSeasonId]);
+
+  // Store currentSeasonId in local storage
+  useEffect(() => {
+    if (currentSeasonId !== null) {
+      localStorage.setItem('ayto-currentSeasonId', currentSeasonId.toString());
+    } else {
+      localStorage.removeItem('ayto-currentSeasonId');
     }
   }, [currentSeasonId]);
 
-  const currentSeason = seasons.find(season => season.id === currentSeasonId);
 
-  const addSeason = (name) => {
-    const newSeason = {
-      id: Date.now(),
-      name,
-      candidates: [],
-      matchingNights: [],
-      truthBooths: [],
-      userPredictions: {},
-    };
-    setSeasons([...seasons, newSeason]);
-    setCurrentSeasonId(newSeason.id);
-  };
+  const addSeason = useCallback(async (name) => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('seasons')
+      .insert([{ name }])
+      .select()
+      .single();
 
-  const deleteSeason = (seasonId) => {
-    setSeasons(seasons.filter(season => season.id !== seasonId));
-    if (currentSeasonId === seasonId) {
-      setCurrentSeasonId(null);
+    if (error) {
+      console.error('Error adding season:', error);
+      setError(error.message);
+    } else {
+      setSeasons(prev => [...prev, data]);
+      setCurrentSeasonId(data.id);
     }
-  };
+  }, [isAdmin]);
 
-  const selectSeason = (id) => {
+  const deleteSeason = useCallback(async (seasonId) => {
+    if (!isAdmin) return;
+    if (!window.confirm('Are you sure you want to delete this season? This action cannot be undone.')) return;
+
+    const { error } = await supabase
+      .from('seasons')
+      .delete()
+      .eq('id', seasonId);
+
+    if (error) {
+      console.error('Error deleting season:', error);
+      setError(error.message);
+    } else {
+      setSeasons(prev => prev.filter(season => season.id !== seasonId));
+      if (currentSeasonId === seasonId) {
+        setCurrentSeasonId(null);
+      }
+    }
+  }, [isAdmin, currentSeasonId]);
+
+  const selectSeason = useCallback((id) => {
     setCurrentSeasonId(id);
-  };
+  }, []);
 
-  const addCandidate = (seasonId, candidate) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, candidates: [...season.candidates, { id: Date.now(), instagram: '', ...candidate }] }
-        : season
-    ));
-  };
+  // Candidate Management
+  const addCandidate = useCallback(async (seasonId, candidate) => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('candidates')
+      .insert([{ ...candidate, season_id: seasonId }])
+      .select()
+      .single();
 
-  const deleteCandidate = (seasonId, candidateId) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, candidates: season.candidates.filter(c => c.id !== candidateId) }
-        : season
-    ));
-  };
+    if (error) {
+      console.error('Error adding candidate:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        candidates: [...prev.candidates, data]
+      }));
+    }
+  }, [isAdmin]);
 
-  const updateCandidate = (seasonId, candidateId, updatedCandidate) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, candidates: season.candidates.map(c => c.id === candidateId ? { ...c, ...updatedCandidate } : c) }
-        : season
-    ));
-  };
+  const deleteCandidate = useCallback(async (seasonId, candidateId) => {
+    if (!isAdmin) return;
+    if (!window.confirm('Are you sure you want to delete this candidate?')) return;
 
-  const addMatchingNight = (seasonId, matchingNight) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, matchingNights: [...season.matchingNights, { id: Date.now(), ...matchingNight }] }
-        : season
-    ));
-  };
+    const { error } = await supabase
+      .from('candidates')
+      .delete()
+      .eq('id', candidateId);
 
-  const deleteMatchingNight = (seasonId, nightId) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, matchingNights: season.matchingNights.filter(night => night.id !== nightId) }
-        : season
-    ));
-  };
+    if (error) {
+      console.error('Error deleting candidate:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        candidates: prev.candidates.filter(c => c.id !== candidateId)
+      }));
+    }
+  }, [isAdmin]);
 
-  const updateMatchingNight = (seasonId, nightId, updatedNight) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, matchingNights: season.matchingNights.map(night => night.id === nightId ? { ...night, ...updatedNight } : night) }
-        : season
-    ));
-  };
+  const updateCandidate = useCallback(async (seasonId, candidateId, updatedCandidate) => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('candidates')
+      .update(updatedCandidate)
+      .eq('id', candidateId)
+      .select()
+      .single();
 
-  const addTruthBooth = (seasonId, truthBooth) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, truthBooths: [...season.truthBooths, { id: Date.now(), ...truthBooth }] }
-        : season
-    ));
-  };
+    if (error) {
+      console.error('Error updating candidate:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        candidates: prev.candidates.map(c => c.id === candidateId ? data : c)
+      }));
+    }
+  }, [isAdmin]);
 
-  const deleteTruthBooth = (seasonId, boothId) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, truthBooths: season.truthBooths.filter(booth => booth.id !== boothId) }
-        : season
-    ));
-  };
+  // Matching Night Management
+  const addMatchingNight = useCallback(async (seasonId, matchingNight) => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('matching_nights')
+      .insert([{ ...matchingNight, season_id: seasonId }])
+      .select()
+      .single();
 
-  const updateTruthBooth = (seasonId, boothId, updatedBooth) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, truthBooths: season.truthBooths.map(booth => booth.id === boothId ? { ...booth, ...updatedBooth } : booth) }
-        : season
-    ));
-  };
+    if (error) {
+      console.error('Error adding matching night:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        matchingNights: [...prev.matchingNights, data]
+      }));
+    }
+  }, [isAdmin]);
 
-  const updateUserPredictions = (seasonId, predictions) => {
-    setSeasons(seasons.map(season =>
-      season.id === seasonId
-        ? { ...season, userPredictions: predictions }
-        : season
-    ));
-  };
+  const deleteMatchingNight = useCallback(async (seasonId, nightId) => {
+    if (!isAdmin) return;
+    if (!window.confirm('Are you sure you want to delete this matching night?')) return;
+
+    const { error } = await supabase
+      .from('matching_nights')
+      .delete()
+      .eq('id', nightId);
+
+    if (error) {
+      console.error('Error deleting matching night:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        matchingNights: prev.matchingNights.filter(night => night.id !== nightId)
+      }));
+    }
+  }, [isAdmin]);
+
+  const updateMatchingNight = useCallback(async (seasonId, nightId, updatedNight) => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('matching_nights')
+      .update(updatedNight)
+      .eq('id', nightId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating matching night:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        matchingNights: prev.matchingNights.map(night => night.id === nightId ? data : night)
+      }));
+    }
+  }, [isAdmin]);
+
+  // Matching Box Management (formerly Truth Booth)
+  const addTruthBooth = useCallback(async (seasonId, truthBooth) => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('matching_boxes')
+      .insert([{ ...truthBooth, season_id: seasonId }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding matching box:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        truthBooths: [...prev.truthBooths, data]
+      }));
+    }
+  }, [isAdmin]);
+
+  const deleteTruthBooth = useCallback(async (seasonId, boothId) => {
+    if (!isAdmin) return;
+    if (!window.confirm('Are you sure you want to delete this matching box entry?')) return;
+
+    const { error } = await supabase
+      .from('matching_boxes')
+      .delete()
+      .eq('id', boothId);
+
+    if (error) {
+      console.error('Error deleting matching box:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        truthBooths: prev.truthBooths.filter(booth => booth.id !== boothId)
+      }));
+    }
+  }, [isAdmin]);
+
+  const updateTruthBooth = useCallback(async (seasonId, boothId, updatedBooth) => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase
+      .from('matching_boxes')
+      .update(updatedBooth)
+      .eq('id', boothId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating matching box:', error);
+      setError(error.message);
+    } else {
+      setCurrentSeason(prev => ({
+        ...prev,
+        truthBooths: prev.truthBooths.map(booth => booth.id === boothId ? data : booth)
+      }));
+    }
+  }, [isAdmin]);
+
+  // User Predictions (already uses Supabase)
+  const updateUserPredictions = useCallback(async (seasonId, predictions) => {
+    // This function is called from MyPredictions.jsx which already handles Supabase interaction
+    // This context function might become redundant or need to be refactored to just trigger a re-fetch
+    // For now, it remains as is, but its direct usage might change.
+    console.warn("updateUserPredictions in SeasonContext might be redundant after full Supabase migration.");
+  }, []);
+
 
   return (
     <SeasonContext.Provider value={{
@@ -160,10 +404,14 @@ export const SeasonProvider = ({ children }) => {
       addMatchingNight,
       deleteMatchingNight,
       updateMatchingNight,
-      addTruthBooth,
-      deleteTruthBooth,
-      updateTruthBooth,
+      addTruthBooth, // Renamed from addTruthBooth to addMatchingBox conceptually
+      deleteTruthBooth, // Renamed from deleteTruthBooth to deleteMatchingBox conceptually
+      updateTruthBooth, // Renamed from updateTruthBooth to updateMatchingBox conceptually
       updateUserPredictions,
+      loadingSeasons,
+      loadingCurrentSeason,
+      error,
+      isAdmin, // Expose isAdmin for convenience
     }}>
       {children}
     </SeasonContext.Provider>

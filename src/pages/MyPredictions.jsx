@@ -1,17 +1,47 @@
 import { useState, useEffect } from 'react';
 import { useSeason } from '../context/SeasonContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabaseClient';
 import { solve } from '../solver/solver';
 
 export default function MyPredictions() {
-  const { currentSeason, updateUserPredictions } = useSeason();
+  const { currentSeason, loadingCurrentSeason, error: seasonError } = useSeason();
+  const { user } = useAuth();
   const [predictions, setPredictions] = useState({});
   const [score, setScore] = useState(null);
+  const [loadingPredictions, setLoadingPredictions] = useState(true);
+  const [error, setError] = useState(null); // Local error state for predictions
 
   useEffect(() => {
-    if (currentSeason?.userPredictions) {
-      setPredictions(currentSeason.userPredictions);
-    }
-  }, [currentSeason]);
+    const fetchPredictions = async () => {
+      if (!user || !currentSeason) {
+        setLoadingPredictions(false);
+        return;
+      }
+
+      setLoadingPredictions(true);
+      setError(null);
+      const { data, error: fetchError } = await supabase
+        .from('predictions')
+        .select('prediction_data')
+        .eq('user_id', user.id)
+        .eq('season_id', currentSeason.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
+        console.error('Error fetching predictions:', fetchError);
+        setError(fetchError.message);
+        setPredictions({});
+      } else if (data) {
+        setPredictions(data.prediction_data);
+      } else {
+        setPredictions({});
+      }
+      setLoadingPredictions(false);
+    };
+
+    fetchPredictions();
+  }, [user, currentSeason]);
 
   if (!currentSeason) {
     return (
@@ -22,6 +52,14 @@ export default function MyPredictions() {
     );
   }
 
+  if (loadingCurrentSeason || loadingPredictions) {
+    return <div className="p-8">Loading your predictions...</div>;
+  }
+
+  if (seasonError || error) {
+    return <div className="p-8 text-red-500">Error: {seasonError || error}</div>;
+  }
+
   const men = currentSeason.candidates.filter(c => c.gender === 'Mann');
   const women = currentSeason.candidates.filter(c => c.gender === 'Frau');
   const numPairs = Math.min(men.length, women.length);
@@ -30,9 +68,24 @@ export default function MyPredictions() {
     setPredictions(prev => ({ ...prev, [manId]: womanId }));
   };
 
-  const handleSave = () => {
-    updateUserPredictions(currentSeason.id, predictions);
-    alert('Predictions saved!');
+  const handleSave = async () => {
+    if (!user) {
+      alert('You must be logged in to save predictions.');
+      return;
+    }
+    const { error: saveError } = await supabase
+      .from('predictions')
+      .upsert({
+        user_id: user.id,
+        season_id: currentSeason.id,
+        prediction_data: predictions
+      }, { onConflict: 'user_id,season_id' });
+
+    if (saveError) {
+      alert('Error saving predictions: ' + saveError.message);
+    } else {
+      alert('Predictions saved!');
+    }
   };
 
   const handleCheck = () => {
