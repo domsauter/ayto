@@ -60,7 +60,7 @@ export function solve(season) {
     const womanId = parseInt(booth.couple.woman);
 
     possibleSolutions = possibleSolutions.filter(solution => {
-      if (booth.isPerfectMatch) {
+      if (booth.is_perfect_match) {
         return solution[manId] === womanId;
       } else {
         return solution[manId] !== womanId;

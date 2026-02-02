@@ -53,7 +53,7 @@ export default function MatchingBox() {
     setEditingBoothId(booth.id);
     setManId(booth.couple.man);
     setWomanId(booth.couple.woman);
-    setIsMatch(booth.isPerfectMatch);
+    setIsMatch(booth.is_perfect_match);
   };
 
   const handleCancelEdit = () => {
@@ -71,7 +71,7 @@ export default function MatchingBox() {
       return;
     }
 
-    const boothData = { couple: { man: manId, woman: womanId }, isPerfectMatch: isMatch };
+    const boothData = { couple: { man: manId, woman: womanId }, is_perfect_match: isMatch };
 
     if (editingBoothId) {
       updateTruthBooth(currentSeason.id, editingBoothId, boothData);
@@ -130,8 +130,8 @@ export default function MatchingBox() {
             const man = men.find(m => m.id === parseInt(booth.couple.man));
             const woman = women.find(w => w.id === parseInt(booth.couple.woman));
             return (
-              <li key={booth.id} className={`p-2 rounded-md flex justify-between items-center ${booth.isPerfectMatch ? 'bg-green-100' : 'bg-red-100'}`}>
-                <span>{man?.name} & {woman?.name} - {booth.isPerfectMatch ? 'Perfect Match' : 'No Match'}</span>
+              <li key={booth.id} className={`p-2 rounded-md flex justify-between items-center ${booth.is_perfect_match ? 'bg-green-100' : 'bg-red-100'}`}>
+                <span>{man?.name} & {woman?.name} - {booth.is_perfect_match ? 'Perfect Match' : 'No Match'}</span>
                 {isAdmin && (
                   <div className="flex gap-2">
                     <button onClick={() => handleEditClick(booth)} className="bg-yellow-500 text-white px-3 py-1 rounded-md">Bearbeiten</button>

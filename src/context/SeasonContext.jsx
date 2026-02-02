@@ -23,14 +23,6 @@ export const SeasonProvider = ({ children }) => {
     const fetchSeasons = async () => {
       setLoadingSeasons(true);
 
-      // Safety timeout
-      const timer = setTimeout(() => {
-        if (isMounted) {
-          setLoadingSeasons(false);
-          console.warn('fetchSeasons timed out, forcing loading false');
-        }
-      }, 15000);
-
       try {
         const { data, error } = await supabase
           .from('seasons')
@@ -54,13 +46,12 @@ export const SeasonProvider = ({ children }) => {
               setCurrentSeasonId(null);
             }
           }
+          setLoadingSeasons(false);
         }
       } catch (e) {
-        console.error("fetchSeasons exception:", e);
-      } finally {
         if (isMounted) {
+          console.error("fetchSeasons exception:", e);
           setLoadingSeasons(false);
-          clearTimeout(timer);
         }
       }
     };
@@ -74,21 +65,16 @@ export const SeasonProvider = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
     const fetchCurrentSeasonDetails = async () => {
-      if (!currentSeasonId) {
-        if (isMounted) setCurrentSeason(null);
-        return;
-      }
-
       setLoadingCurrentSeason(true);
       setError(null);
 
-      // Safety timeout
-      const timer = setTimeout(() => {
+      if (!currentSeasonId) {
         if (isMounted) {
-          setLoadingCurrentSeason(false);
-          console.warn('fetchCurrentSeasonDetails timed out, forcing loading false');
+          setCurrentSeason(null);
+          setLoadingCurrentSeason(false); // Ensure loading is turned off if no season is selected
         }
-      }, 15000);
+        return;
+      }
 
       try {
         const [
@@ -129,19 +115,16 @@ export const SeasonProvider = ({ children }) => {
             ...seasonData,
             candidates: candidatesData,
             matchingNights: matchingNightsData,
-            truthBooths: matchingBoxesData, // Renamed truthBooths to matchingBoxes
+            truthBooths: matchingBoxesData,
           });
+          setLoadingCurrentSeason(false);
         }
       } catch (err) {
         if (isMounted) {
           console.error('Error fetching season details:', err);
           setError(err.message);
           setCurrentSeason(null);
-        }
-      } finally {
-        if (isMounted) {
           setLoadingCurrentSeason(false);
-          clearTimeout(timer);
         }
       }
     };

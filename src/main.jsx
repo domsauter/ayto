@@ -7,13 +7,11 @@ import { AuthProvider } from './context/AuthContext'
 import { BrowserRouter } from 'react-router-dom'
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <AuthProvider>
-        <SeasonProvider>
-          <App />
-        </SeasonProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </StrictMode>,
+  <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <AuthProvider>
+      <SeasonProvider>
+        <App />
+      </SeasonProvider>
+    </AuthProvider>
+  </BrowserRouter>,
 )

@@ -32,11 +32,6 @@ export const AuthProvider = ({ children }) => {
 
     getSessionAndProfile();
 
-    // Safety timeout to prevent infinite loading
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 3000);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const user = session?.user ?? null;
       setUser(user);
@@ -56,7 +51,6 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => {
-      clearTimeout(timer);
       subscription?.unsubscribe();
     };
   }, []);
