@@ -6,6 +6,13 @@ import { SeasonProvider } from './context/SeasonContext'
 import { AuthProvider } from './context/AuthContext'
 import { BrowserRouter } from 'react-router-dom'
 
+// Check if we were redirected from 404.html and navigate to the correct path
+if (sessionStorage.redirectPath) {
+  const redirectPath = sessionStorage.redirectPath;
+  sessionStorage.removeItem('redirectPath');
+  window.history.replaceState(null, null, redirectPath);
+}
+
 createRoot(document.getElementById('root')).render(
   <BrowserRouter basename={import.meta.env.BASE_URL}>
     <AuthProvider>

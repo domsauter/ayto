@@ -4,11 +4,16 @@
     <meta charset="utf-8">
     <title>Single Page App</title>
     <script type="text/javascript">
-      var redirect = sessionStorage.redirect;
-      delete sessionStorage.redirect;
-      if (redirect && redirect != location.href) {
-        history.replaceState(null, null, redirect);
-      }
+      // Store the requested path and redirect to index.html
+      var pathname = window.location.pathname;
+      var search = window.location.search;
+      var hash = window.location.hash;
+      
+      // Save the full path to restore after index.html loads
+      sessionStorage.setItem('redirectPath', pathname + search + hash);
+      
+      // Redirect to index.html
+      window.location = '/ayto/';
     </script>
   </head>
   <body>
