@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Der AYTO-Match-Finder</title>
+    <script type="text/javascript">
+      (function(){
+        var l = window.location;
+        if (l.pathname.indexOf('/ayto/') == 0 && !l.pathname.includes('/index.html') && l.search == '') {
+          sessionStorage.redirect = l.pathname;
+          window.location = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + '/ayto/index.html';
+        }
+      }());
+    </script>
     <script type="module" crossorigin src="/ayto/assets/index-CKUaHKPX.js"></script>
     <link rel="stylesheet" crossorigin href="/ayto/assets/index-ly2WM42_.css">
   </head>
