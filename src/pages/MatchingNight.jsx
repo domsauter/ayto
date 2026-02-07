@@ -173,10 +173,10 @@ export default function MatchingNight() {
                   <p className="font-bold">Lichter: {night.lights}</p>
                   <ul className="mt-2">
                     {night.couples.map((couple, index) => {
-                      const man = men.find(m => m.id === parseInt(couple.mann));
-                      const woman = women.find(w => w.id === parseInt(couple.frau));
+                      const man = men.find(m => String(m.id) === String(couple.mann));
+                      const woman = women.find(w => String(w.id) === String(couple.frau));
                       return (
-                        <li key={index}>{man?.name} & {woman?.name}</li>
+                        <li key={index}>{man?.name || 'Unknown'} & {woman?.name || 'Unknown'}</li>
                       )
                     })}
                   </ul>

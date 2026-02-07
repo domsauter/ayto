@@ -73,18 +73,28 @@ export default function MyPredictions() {
       alert('You must be logged in to save predictions.');
       return;
     }
-    const { error: saveError } = await supabase
-      .from('predictions')
-      .upsert({
-        user_id: user.id,
-        season_id: currentSeason.id,
-        prediction_data: predictions
-      }, { onConflict: 'user_id,season_id' });
+    try {
+      const { error: saveError } = await supabase
+        .from('predictions')
+        .upsert({
+          user_id: user.id,
+          season_id: currentSeason.id,
+          prediction_data: predictions
+        }, { onConflict: 'user_id,season_id' });
 
-    if (saveError) {
-      alert('Error saving predictions: ' + saveError.message);
-    } else {
-      alert('Predictions saved!');
+      if (saveError) {
+        console.error('Save error:', saveError);
+        if (saveError.code === '42501' || saveError.code === '5') {
+          alert('Fehler beim Speichern: Du hast keine Berechtigung. Bitte kontaktiere den Administrator.');
+        } else {
+          alert('Error saving predictions: ' + saveError.message);
+        }
+      } else {
+        alert('Predictions saved!');
+      }
+    } catch (err) {
+      console.error('Exception during save:', err);
+      alert('Unexpected error: ' + err.message);
     }
   };
 

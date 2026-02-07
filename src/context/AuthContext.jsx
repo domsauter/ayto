@@ -10,62 +10,46 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let isMounted = true;
-    let timeoutId;
+    let authLoadTimeout;
 
-    const getSessionAndProfile = async () => {
+    // Clear potentially corrupted auth tokens if session retrieval hangs
+    const clearCorruptedTokens = async () => {
+      const keys = Object.keys(localStorage);
+      const authKeys = keys.filter(key => key.includes('auth') || key.includes('sb-'));
+      authKeys.forEach(key => {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.error(`Failed to remove ${key}:`, e);
+        }
+      });
+    };
+
+    const initializeAuth = async () => {
       try {
-        // Add a 10-second timeout to prevent infinite loading
+        // Set a hard timeout for session check - if it takes too long, force clear auth
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Session check timeout')), 10000)
+          setTimeout(() => reject(new Error('Auth timeout')), 8000)
         );
 
-        const sessionPromise = supabase.auth.getSession();
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
-        
-        if (!isMounted) return;
-
-        const user = session?.user ?? null;
-        setUser(user);
-
-        if (user) {
-          try {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-            if (isMounted) {
-              setProfile(profile);
-            }
-          } catch (profileError) {
-            console.error('Error fetching profile:', profileError);
-            if (isMounted) {
-              setProfile(null);
-            }
-          }
-        }
+        await Promise.race([
+          supabase.auth.getSession(),
+          timeoutPromise
+        ]);
       } catch (error) {
-        console.error('Error checking auth session:', error);
-        // Clear potentially corrupted auth token
-        if (error.message === 'Session check timeout' || error.message?.includes('ECONNABORTED')) {
-          try {
-            await supabase.auth.signOut();
-          } catch (e) {
-            console.error('Error signing out:', e);
-          }
-        }
+        console.warn('Auth initialization timeout or error:', error.message);
         if (isMounted) {
+          // Clear corrupted tokens and force auth off
+          await clearCorruptedTokens();
           setUser(null);
           setProfile(null);
-        }
-      } finally {
-        if (isMounted) {
           setLoading(false);
         }
       }
     };
 
-    getSessionAndProfile();
+    // Initialize auth with timeout protection
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!isMounted) return;
@@ -92,14 +76,25 @@ export const AuthProvider = ({ children }) => {
       } else {
         setProfile(null);
       }
-      // Ensure loading is false when auth state changes (e.g. sign out)
-      setLoading(false);
+      
+      // Mark loading as complete when auth state is determined
+      if (isMounted) {
+        setLoading(false);
+      }
     });
+
+    // Set absolute maximum loading time
+    authLoadTimeout = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Auth loading exceeded 10 seconds, forcing completion');
+        setLoading(false);
+      }
+    }, 10000);
 
     return () => {
       isMounted = false;
+      clearTimeout(authLoadTimeout);
       subscription?.unsubscribe();
-      if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
 

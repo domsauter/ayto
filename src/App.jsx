@@ -1,19 +1,22 @@
 import { Routes, Route } from 'react-router-dom'
+import { Suspense, lazy } from 'react'
 import Navbar from './components/navbar'
 import Season from './pages/Season'
-import Candidates from './pages/Candidates'
-import MatchingNight from './pages/MatchingNight'
-import MatchingBox from './pages/MatchingBox'
-import MyPredictions from './pages/MyPredictions'
-import Predictions from './pages/Predictions'
-import Auth from './pages/Auth'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
-import Admin from './pages/Admin'
-import { useSeason } from './context/SeasonContext' // Import useSeason
+import { useSeason } from './context/SeasonContext'
+
+// Code splitting for better performance
+const Candidates = lazy(() => import('./pages/Candidates'))
+const MatchingNight = lazy(() => import('./pages/MatchingNight'))
+const MatchingBox = lazy(() => import('./pages/MatchingBox'))
+const MyPredictions = lazy(() => import('./pages/MyPredictions'))
+const Predictions = lazy(() => import('./pages/Predictions'))
+const Auth = lazy(() => import('./pages/Auth'))
+const Admin = lazy(() => import('./pages/Admin'))
 
 function App() {
-  const { loadingSeasons, loadingCurrentSeason, error } = useSeason(); // Get loading and error states
+  const { loadingSeasons, loadingCurrentSeason, error } = useSeason()
 
   if (loadingSeasons || loadingCurrentSeason) {
     return (
@@ -36,19 +39,43 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <Routes>
           <Route path="/" element={<Season />} />
-          <Route path="/candidates" element={<Candidates />} />
-          <Route path="/matching-night" element={<MatchingNight />} />
-          <Route path="/matching-box" element={<MatchingBox />} />
+          <Route path="/candidates" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div></div>}>
+              <Candidates />
+            </Suspense>
+          } />
+          <Route path="/matching-night" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div></div>}>
+              <MatchingNight />
+            </Suspense>
+          } />
+          <Route path="/matching-box" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div></div>}>
+              <MatchingBox />
+            </Suspense>
+          } />
           <Route path="/my-predictions" element={
             <ProtectedRoute>
-              <MyPredictions />
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div></div>}>
+                <MyPredictions />
+              </Suspense>
             </ProtectedRoute>
           } />
-          <Route path="/predictions" element={<Predictions />} />
-          <Route path="/auth" element={<Auth />} />
+          <Route path="/predictions" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div></div>}>
+              <Predictions />
+            </Suspense>
+          } />
+          <Route path="/auth" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div></div>}>
+              <Auth />
+            </Suspense>
+          } />
           <Route path="/admin" element={
             <AdminRoute>
-              <Admin />
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div></div>}>
+                <Admin />
+              </Suspense>
             </AdminRoute>
           } />
         </Routes>
