@@ -1,0 +1,1 @@
+import{j as e}from"./auth-CiqFla1T.js";const i=()=>e.jsxs("div",{children:[e.jsx("h1",{children:"Admin Page"}),e.jsx("p",{children:"This is where admins can generate general details."})]});export{i as default};
