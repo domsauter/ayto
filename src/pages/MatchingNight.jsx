@@ -35,10 +35,10 @@ export default function MatchingNight() {
     return <div className="p-8 text-red-500">Error: {error}</div>;
   }
 
-  const men = currentSeason.candidates.filter(c => c.gender === 'Mann');
-  const women = currentSeason.candidates.filter(c => c.gender === 'Frau');
+  const allMen = currentSeason.candidates.filter(c => c.gender === 'Mann');
+  const allWomen = currentSeason.candidates.filter(c => c.gender === 'Frau');
 
-  if (men.length === 0 || women.length === 0) {
+  if (allMen.length === 0 || allWomen.length === 0) {
     return (
       <div className="p-8">
         <h1 className="text-2xl font-bold">Matching Night</h1>
@@ -46,6 +46,15 @@ export default function MatchingNight() {
       </div>
     );
   }
+
+  // Derive confirmed perfect matches from the Match Box
+  const confirmedPerfectMatches = (currentSeason.truthBooths || []).filter(b => b.is_perfect_match);
+  const confirmedManIds = new Set(confirmedPerfectMatches.map(b => String(b.couple.man)));
+  const confirmedWomanIds = new Set(confirmedPerfectMatches.map(b => String(b.couple.woman)));
+
+  // Exclude confirmed candidates from the dropdowns
+  const men = allMen.filter(m => !confirmedManIds.has(String(m.id)));
+  const women = allWomen.filter(w => !confirmedWomanIds.has(String(w.id)));
 
   const numPairs = Math.min(men.length, women.length);
 
@@ -73,7 +82,7 @@ export default function MatchingNight() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!isAdmin) return; // Only admins can submit
-    if (pairs.length < numPairs || pairs.some(p => !p.mann || !p.frau)) {
+    if (pairs.length < numPairs || pairs.some(p => !p || !p.mann || !p.frau)) {
       alert("Please form all pairs.");
       return;
     }
@@ -95,6 +104,19 @@ export default function MatchingNight() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">Matching Night für {currentSeason.name}</h1>
+
+      {confirmedPerfectMatches.length > 0 && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-300 rounded-md">
+          <p className="font-bold text-green-800 mb-1">✅ Bestätigte Perfect Matches (nicht auswählbar):</p>
+          <ul className="text-green-700 text-sm">
+            {confirmedPerfectMatches.map(b => {
+              const man = allMen.find(m => String(m.id) === String(b.couple.man));
+              const woman = allWomen.find(w => String(w.id) === String(b.couple.woman));
+              return <li key={b.id}>{man?.name || 'Unbekannt'} & {woman?.name || 'Unbekannt'}</li>;
+            })}
+          </ul>
+        </div>
+      )}
 
       {isAdmin && (
         <form onSubmit={handleSubmit} className="mb-8 p-4 border rounded-md">

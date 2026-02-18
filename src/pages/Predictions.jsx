@@ -21,9 +21,9 @@ export default function Predictions() {
   // Use useCallback to avoid recreating function unnecessarily
   const handleSolve = useCallback(() => {
     if (!currentSeason) return;
-    
+
     setIsCalculating(true);
-    
+
     // Simulate async calculation to prevent blocking UI
     setTimeout(() => {
       try {
@@ -37,65 +37,94 @@ export default function Predictions() {
         setAnalysis(partnerAnalysis);
         console.log('Partner analysis completed:', partnerAnalysis);
 
-      if (solutions.length > 0) {
-        const coupleCounts = {};
-        const totalSolutions = solutions.length;
+        // Derive matchbox constraints
+        const truthBooths = currentSeason.truthBooths || [];
+        const perfectMatches = truthBooths.filter(b => b.is_perfect_match);
+        const noMatchKeys = new Set(
+          truthBooths
+            .filter(b => !b.is_perfect_match)
+            .map(b => `${Number(b.couple.man)}-${Number(b.couple.woman)}`)
+        );
 
-        // Collect all couples that appear in matching nights and matching boxes
-        const allCouples = new Set();
-        
-        // Add couples from matching nights
-        currentSeason.matchingNights.forEach(night => {
-          night.couples.forEach(couple => {
-            allCouples.add(`${Number(couple.mann)}-${Number(couple.frau)}`);
+        if (solutions.length > 0) {
+          const coupleCounts = {};
+          const totalSolutions = solutions.length;
+
+          // Collect all couples that appear in matching nights and matching boxes
+          const allCouples = new Set();
+
+          // Add couples from matching nights (excluding no-match pairs)
+          currentSeason.matchingNights.forEach(night => {
+            night.couples.forEach(couple => {
+              const key = `${Number(couple.mann)}-${Number(couple.frau)}`;
+              if (!noMatchKeys.has(key)) allCouples.add(key);
+            });
           });
-        });
 
-        // Add couples from matching boxes
-        currentSeason.truthBooths.forEach(booth => {
-          const manId = Number(booth.couple.man);
-          const womanId = Number(booth.couple.woman);
-          allCouples.add(`${manId}-${womanId}`);
-        });
+          // Add couples from matching boxes (excluding no-match pairs)
+          currentSeason.truthBooths.forEach(booth => {
+            const manId = Number(booth.couple.man);
+            const womanId = Number(booth.couple.woman);
+            const key = `${manId}-${womanId}`;
+            if (!noMatchKeys.has(key)) allCouples.add(key);
+          });
 
-        // Count how many solutions contain each couple from matching nights/boxes
-        allCouples.forEach(coupleKey => {
-          coupleCounts[coupleKey] = 0;
-        });
-
-        solutions.forEach(solution => {
-          // Count all couples in this solution that were in matching nights/boxes
+          // Count how many solutions contain each couple
           allCouples.forEach(coupleKey => {
-            const [manId, womanId] = coupleKey.split('-').map(Number);
-            if (solution[manId] === womanId) {
-              coupleCounts[coupleKey]++;
+            coupleCounts[coupleKey] = 0;
+          });
+
+          solutions.forEach(solution => {
+            allCouples.forEach(coupleKey => {
+              const [manId, womanId] = coupleKey.split('-').map(Number);
+              if (solution[manId] === womanId) {
+                coupleCounts[coupleKey]++;
+              }
+            });
+          });
+
+          const newProbabilities = Object.entries(coupleCounts).map(([key, count]) => {
+            const [manId, womanId] = key.split('-').map(Number);
+            return {
+              manId,
+              womanId,
+              probability: (count / totalSolutions) * 100,
+            };
+          });
+
+          // Overlay confirmed perfect matches at 100%
+          perfectMatches.forEach(b => {
+            const manId = Number(b.couple.man);
+            const womanId = Number(b.couple.woman);
+            const key = `${manId}-${womanId}`;
+            const existing = newProbabilities.find(p => p.manId === manId && p.womanId === womanId);
+            if (existing) {
+              existing.probability = 100;
+            } else {
+              newProbabilities.push({ manId, womanId, probability: 100 });
             }
           });
-        });
 
-        const newProbabilities = Object.entries(coupleCounts).map(([key, count]) => {
-          const [manId, womanId] = key.split('-').map(Number);
-          return {
-            manId,
-            womanId,
-            probability: (count / totalSolutions) * 100,
-          };
-        });
-
-        newProbabilities.sort((a, b) => b.probability - a.probability);
-        setProbabilities(newProbabilities);
-      } else {
-        setProbabilities([]);
+          newProbabilities.sort((a, b) => b.probability - a.probability);
+          setProbabilities(newProbabilities);
+        } else {
+          // Even with no matching nights, show perfect matches at 100%
+          const pmProbabilities = perfectMatches.map(b => ({
+            manId: Number(b.couple.man),
+            womanId: Number(b.couple.woman),
+            probability: 100,
+          }));
+          setProbabilities(pmProbabilities);
+        }
+        setIsCalculating(false);
+      } catch (error) {
+        console.error('Error during solve:', error);
+        alert('Fehler beim Berechnen: ' + error.message);
+        setSolutionCount(null);
+        setAnalysis(null);
+        setProbabilities(null);
+        setIsCalculating(false);
       }
-      setIsCalculating(false);
-    } catch (error) {
-      console.error('Error during solve:', error);
-      alert('Fehler beim Berechnen: ' + error.message);
-      setSolutionCount(null);
-      setAnalysis(null);
-      setProbabilities(null);
-      setIsCalculating(false);
-    }
     }, 0);
   }, [currentSeason]);
 
@@ -103,8 +132,8 @@ export default function Predictions() {
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">Predictions for {currentSeason.name}</h1>
 
-      <button 
-        onClick={handleSolve} 
+      <button
+        onClick={handleSolve}
         disabled={isCalculating}
         className={`px-4 py-2 rounded-md mb-8 ${isCalculating ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'} text-white`}
       >
@@ -131,7 +160,7 @@ export default function Predictions() {
       {analysis && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h3 className="text-lg font-bold mb-6 text-blue-900">Perfect Match Kandidaten</h3>
-          
+
           {/* Men's possible partners with probabilities */}
           <div className="mb-8">
             <h4 className="font-bold mb-4 text-blue-800">Männer</h4>
@@ -141,7 +170,7 @@ export default function Predictions() {
                 const manPartners = probabilities
                   ? probabilities.filter(p => p.manId === man.id).sort((a, b) => b.probability - a.probability)
                   : [];
-                
+
                 return (
                   <div key={man.id} className={`p-4 rounded-lg ${manAnalysis.possiblePartners.length === 0 ? 'bg-red-100 border-l-4 border-red-500' : manAnalysis.certainPartner ? 'bg-green-100 border-l-4 border-green-500' : 'bg-white border border-blue-200'}`}>
                     <p className="font-bold text-lg mb-3">{man.name}</p>
@@ -158,8 +187,8 @@ export default function Predictions() {
                               </span>
                               <div className="flex items-center gap-2">
                                 <div className="w-20 bg-gray-200 rounded-full h-2">
-                                  <div 
-                                    className={`h-2 rounded-full ${probability === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                                  <div
+                                    className={`h-2 rounded-full ${probability === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
                                     style={{ width: `${probability}%` }}
                                   ></div>
                                 </div>
@@ -187,7 +216,7 @@ export default function Predictions() {
                 const womanPartners = probabilities
                   ? probabilities.filter(p => p.womanId === woman.id).sort((a, b) => b.probability - a.probability)
                   : [];
-                
+
                 return (
                   <div key={woman.id} className={`p-4 rounded-lg ${womanAnalysis.possiblePartners.length === 0 ? 'bg-red-100 border-l-4 border-red-500' : womanAnalysis.certainPartner ? 'bg-green-100 border-l-4 border-green-500' : 'bg-white border border-pink-200'}`}>
                     <p className="font-bold text-lg mb-3">{woman.name}</p>
@@ -204,8 +233,8 @@ export default function Predictions() {
                               </span>
                               <div className="flex items-center gap-2">
                                 <div className="w-20 bg-gray-200 rounded-full h-2">
-                                  <div 
-                                    className={`h-2 rounded-full ${probability === 100 ? 'bg-green-500' : 'bg-pink-500'}`} 
+                                  <div
+                                    className={`h-2 rounded-full ${probability === 100 ? 'bg-green-500' : 'bg-pink-500'}`}
                                     style={{ width: `${probability}%` }}
                                   ></div>
                                 </div>
