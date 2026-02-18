@@ -93,10 +93,13 @@ export default function Predictions() {
           });
 
           // Overlay confirmed perfect matches at 100%
+          const confirmedManIds = new Set(perfectMatches.map(b => Number(b.couple.man)));
+          const confirmedWomanIds = new Set(perfectMatches.map(b => Number(b.couple.woman)));
+          const perfectMatchKeys = new Set(perfectMatches.map(b => `${Number(b.couple.man)}-${Number(b.couple.woman)}`));
+
           perfectMatches.forEach(b => {
             const manId = Number(b.couple.man);
             const womanId = Number(b.couple.woman);
-            const key = `${manId}-${womanId}`;
             const existing = newProbabilities.find(p => p.manId === manId && p.womanId === womanId);
             if (existing) {
               existing.probability = 100;
@@ -105,8 +108,17 @@ export default function Predictions() {
             }
           });
 
-          newProbabilities.sort((a, b) => b.probability - a.probability);
-          setProbabilities(newProbabilities);
+          // Remove any entry where a confirmed candidate appears with someone other than their confirmed partner
+          const filteredProbabilities = newProbabilities.filter(p => {
+            if (confirmedManIds.has(p.manId) || confirmedWomanIds.has(p.womanId)) {
+              // Only keep their confirmed perfect match entry
+              return perfectMatchKeys.has(`${p.manId}-${p.womanId}`);
+            }
+            return true;
+          });
+
+          filteredProbabilities.sort((a, b) => b.probability - a.probability);
+          setProbabilities(filteredProbabilities);
         } else {
           // Even with no matching nights, show perfect matches at 100%
           const pmProbabilities = perfectMatches.map(b => ({

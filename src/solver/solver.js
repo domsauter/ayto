@@ -147,9 +147,14 @@ export function analyzePartnerPossibilities(season, solutions) {
 
   // Build no-match lookup from matchbox
   const noMatchKeys = new Set();
+  const perfectMatchMap = {}; // manId -> womanId for confirmed perfect matches
+  const perfectMatchReverseMap = {}; // womanId -> manId for confirmed perfect matches
   (season.truthBooths || []).forEach(b => {
     if (!b.is_perfect_match) {
       noMatchKeys.add(`${Number(b.couple.man)}-${Number(b.couple.woman)}`);
+    } else {
+      perfectMatchMap[Number(b.couple.man)] = Number(b.couple.woman);
+      perfectMatchReverseMap[Number(b.couple.woman)] = Number(b.couple.man);
     }
   });
 
@@ -192,6 +197,19 @@ export function analyzePartnerPossibilities(season, solutions) {
     });
   });
 
+  // Override confirmed perfect match candidates: lock them to their confirmed partner only
+  Object.entries(perfectMatchMap).forEach(([manId, womanId]) => {
+    manId = Number(manId);
+    if (analysis.men[manId]) {
+      analysis.men[manId].possiblePartners = new Set([womanId]);
+      analysis.men[manId].certainPartner = womanId;
+    }
+    if (analysis.women[womanId]) {
+      analysis.women[womanId].possiblePartners = new Set([manId]);
+      analysis.women[womanId].certainPartner = manId;
+    }
+  });
+
   // If only one solution, everyone has a certain partner
   if (solutions.length === 1) {
     const solution = solutions[0];
@@ -204,6 +222,7 @@ export function analyzePartnerPossibilities(season, solutions) {
       }
     });
   }
+
 
   // Convert Sets to Arrays and find contradictions
   men.forEach(man => {
