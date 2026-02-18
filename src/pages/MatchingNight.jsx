@@ -98,8 +98,8 @@ export default function MatchingNight() {
     handleCancelEdit(); // Reset form
   };
 
-  const selectedMen = pairs.map(p => p.mann);
-  const selectedWomen = pairs.map(p => p.frau);
+  const selectedMen = pairs.map(p => p?.mann).filter(Boolean);
+  const selectedWomen = pairs.map(p => p?.frau).filter(Boolean);
 
   return (
     <div className="p-8">
